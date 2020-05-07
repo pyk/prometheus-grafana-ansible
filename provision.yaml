@@ -180,6 +180,13 @@
         proto: tcp
         state: enabled
 
+    - name: Provision Prometheus as Grafana datasource
+      template:
+        src:  grafana/datasources/prometheus.yaml
+        dest: /etc/grafana/provisioning/datasources/prometheus.yaml
+      notify:
+      - restart grafana-server
+
   handlers:
   - name: restart grafana-server
     service:
