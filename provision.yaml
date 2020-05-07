@@ -1,0 +1,166 @@
+- hosts: localhost
+  vars_files:
+    - secrets.yaml
+  tasks:
+    - name: Make sure the SSH key exists
+      user:
+        name: "{{ ansible_user_id }}"
+        generate_ssh_key: yes
+        ssh_key_file: .ssh/id_rsa
+
+    - name: Make sure SSH key is exists at DigitalOcean
+      digital_ocean_sshkey:
+        oauth_token: "{{ digitalocean.access_token }}"
+        ssh_pub_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+        state: present
+      register: created_ssh
+
+    # Docs:
+    # https://docs.ansible.com/ansible/latest/modules/digital_ocean_droplet_module.html
+    - name: Create new droplet
+      digital_ocean_droplet:
+        backups: no
+        image: ubuntu-18-04-x64
+        ipv6: yes
+        name: prometheus-grafana
+        unique_name: yes
+        monitoring: yes
+        oauth_token: "{{ digitalocean.access_token }}"
+        private_networking: yes
+        region: sgp1
+        size: s-1vcpu-1gb
+        ssh_keys:
+          - "{{ created_ssh.data.ssh_key.id }}"
+        tags:
+          - prometheus
+          - grafana
+          - monitoring
+        wait: yes
+        wait_timeout: 500 # seconds
+        state: present
+      register: created_droplet
+
+    # - debug:
+    #     msg: "{{ created_droplet }}"
+
+    # Docs:
+    # https://docs.ansible.com/ansible/latest/modules/add_host_module.html
+    - name: Add created droplet ip to ansible host
+      add_host:
+        name: "{{ created_droplet.data.ip_address }}"
+        groups: created_host
+        ansible_python_interpreter: /usr/bin/python3
+
+- hosts: created_host
+  vars_files:
+    - secrets.yaml
+  remote_user: root
+  gather_facts: no
+  tasks:
+    # Docs:
+    # https://docs.ansible.com/ansible/latest/modules/wait_for_module.html
+    # https://docs.ansible.com/ansible/latest/user_guide/playbooks_variables.html
+    - name: Wait for port 22 to become available
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 22
+      delegate_to: localhost
+
+    # Docs:
+    # https://docs.ansible.com/ansible/latest/modules/setup_module.html
+    - name: Gather facts now that host is available
+      setup:
+        gather_subset: all
+
+    - debug:
+        msg:
+        - "CPU: {{ ansible_processor }}"
+        - "CPU Core: {{ ansible_processor_cores }}"
+        - "RAM: {{ ansible_memtotal_mb }}"
+        - "SWAP: {{ ansible_memory_mb.swap.total }}"
+
+    - name: Add Grafana signing key
+      apt_key:
+        url: https://packages.grafana.com/gpg.key
+        state: present
+
+    - name: Add Grafana APT repository
+      apt_repository:
+        repo: deb https://packages.grafana.com/oss/deb stable main
+        state: present
+        filename: grafana
+
+    - name: Install required packages
+      apt:
+        update_cache: yes
+        pkg:
+          - nginx
+          - prometheus
+          - python3-passlib
+          - grafana
+
+    - name: Enable Nginx to start on boot
+      service:
+        enabled: yes
+        name: nginx
+        state: started
+
+    - name: Enable Prometheus to start on boot
+      service:
+        enabled: yes
+        name: prometheus
+        state: started
+
+    - name: Enable Grafana to start on boot
+      service:
+        enabled: yes
+        name: grafana-server
+        state: started
+
+    - name: Install grafana configuration
+      template:
+        src: grafana.ini
+        dest: /etc/grafana/grafana.ini
+      notify:
+        - restart grafana-server
+
+    - name: Install prometheus configuration
+      template:
+        src: prometheus.yaml
+        dest: /etc/prometheus/prometheus.yml
+      notify:
+        - restart prometheus
+
+    - name: Add user and password to protect prometheus
+      htpasswd:
+        path: /etc/nginx/.htpasswd
+        name: "{{ prometheus.user }}"
+        password: "{{ prometheus.pass }}"
+
+    - name: Remove default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Install NGINX configuration file
+      template:
+        src:  site.conf
+        dest: /etc/nginx/sites-enabled/site
+      notify:
+      - restart nginx
+
+  handlers:
+  - name: restart grafana-server
+    service:
+      name: grafana-server
+      state: restarted
+  - name: restart prometheus
+    service:
+      name: prometheus
+      state: restarted
+  - name: restart nginx
+    service:
+      name: nginx
+      state: restarted
+
+
