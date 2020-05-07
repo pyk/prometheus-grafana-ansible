@@ -129,14 +129,14 @@
 
     - name: Install grafana configuration
       template:
-        src: grafana.ini
+        src: grafana/grafana.ini
         dest: /etc/grafana/grafana.ini
       notify:
         - restart grafana-server
 
     - name: Install prometheus configuration
       template:
-        src: prometheus.yaml
+        src: prometheus/prometheus.yaml
         dest: /etc/prometheus/prometheus.yml
       notify:
         - restart prometheus
@@ -154,7 +154,7 @@
 
     - name: Install Prometheus Server configuration file
       template:
-        src:  site_prometheus.conf
+        src:  prometheus/nginx.conf
         dest: /etc/nginx/sites-enabled/prometheus
       notify:
       - restart nginx
@@ -168,7 +168,7 @@
 
     - name: Install Grafana Server configuration file
       template:
-        src:  site_grafana.conf
+        src:  grafana/nginx.conf
         dest: /etc/nginx/sites-enabled/grafana
       notify:
       - restart nginx

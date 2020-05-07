@@ -1,4 +1,4 @@
-# Sample config for Prometheus.
+# Configuration for Prometheus.
 
 global:
   scrape_interval:     15s # By default, scrape targets every 15 seconds.
@@ -31,7 +31,7 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: node
+  - job_name: '{{ digitalocean.droplet_name }}-node'
     # If prometheus-node-exporter is installed, grab stats about the local
     # machine by default.
     static_configs:

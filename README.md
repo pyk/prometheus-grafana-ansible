@@ -51,14 +51,15 @@ following command:
 Go to `http:://IP_ADDRESS` to setup the grafana, use username & password `admin:admin`
 to login to the first time.
 
-Go to `http://IP_ADRESS:9090` to access the prometheus.
+Go to `http://IP_ADRESS:9000` to access the prometheus.
 
 
 ## Configuration
 
-To update grafana configuration, you can update `grafana.ini` file.
+To update grafana configuration, you can update `grafana/grafana.ini` file.
 
-To update prometheus configuration, you can update `prometheus.yaml` file.
+To update prometheus configuration, you can update `prometheus/prometheus.yaml`
+file.
 
 To apply the update, rerun the following command:
 
