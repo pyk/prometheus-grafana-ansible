@@ -22,7 +22,7 @@
         backups: no
         image: ubuntu-18-04-x64
         ipv6: yes
-        name: prometheus-grafana
+        name: "{{ digitalocean.droplet_name }}"
         unique_name: yes
         monitoring: yes
         oauth_token: "{{ digitalocean.access_token }}"
@@ -66,6 +66,15 @@
         port: 22
       delegate_to: localhost
 
+    # Since we use ufw we need to enable explicitly here
+    # otherwise we can't perform any ssh again
+    - name: Allow port 22 for SSH
+      ufw:
+        rule: limit
+        port: ssh
+        proto: tcp
+        state: enabled
+
     # Docs:
     # https://docs.ansible.com/ansible/latest/modules/setup_module.html
     - name: Gather facts now that host is available
@@ -95,9 +104,10 @@
         update_cache: yes
         pkg:
           - nginx
-          - prometheus
+          - prometheus=2.1.0+ds-1
           - python3-passlib
           - grafana
+          - ufw
 
     - name: Enable Nginx to start on boot
       service:
@@ -142,12 +152,33 @@
         path: /etc/nginx/sites-enabled/default
         state: absent
 
-    - name: Install NGINX configuration file
+    - name: Install Prometheus Server configuration file
       template:
-        src:  site.conf
-        dest: /etc/nginx/sites-enabled/site
+        src:  site_prometheus.conf
+        dest: /etc/nginx/sites-enabled/prometheus
       notify:
       - restart nginx
+
+    - name: Allow port 9090 for prometheus
+      ufw:
+        rule: allow
+        port: 9000
+        proto: tcp
+        state: enabled
+
+    - name: Install Grafana Server configuration file
+      template:
+        src:  site_grafana.conf
+        dest: /etc/nginx/sites-enabled/grafana
+      notify:
+      - restart nginx
+
+    - name: Allow port 80 for Grafana
+      ufw:
+        rule: allow
+        port: 80
+        proto: tcp
+        state: enabled
 
   handlers:
   - name: restart grafana-server
